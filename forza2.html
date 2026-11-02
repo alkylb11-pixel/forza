@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Forza Track — Трекер тренировок</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            950: '#090d16',
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155'
+                        },
+                        accent: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            400: '#60a5fa'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+    </style>
+</head>
+<body class="bg-dark-950 text-slate-100 font-sans min-h-screen flex flex-col justify-between antialiased selection:bg-accent-500 selection:text-white pb-20" x-data="forzaApp()">
+
+    <!-- WRAPPER FOR MOBILE APP VIEW -->
+    <div class="w-full max-w-md mx-auto flex flex-col min-h-screen bg-dark-950 border-x border-slate-900 shadow-2xl relative">
+
+        <!-- HEADER -->
+        <header class="bg-dark-950/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-40 px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-600 to-blue-800 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <i class="fa-solid fa-bolt text-white text-base"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base tracking-tight leading-none">Forza<span class="text-accent-400">Track</span></h1>
+                        <p class="text-[10px] text-slate-400">Твой личный зал</p>
+                    </div>
+                </div>
+
+                <!-- Active Workout Status Indicator -->
+                <template x-if="workout.isActive">
+                    <div @click="activeTab = 'workout'" class="flex items-center space-x-2 bg-accent-600/20 border border-accent-500/40 px-3 py-1 rounded-full cursor-pointer animate-pulse">
+                        <span class="w-2 h-2 rounded-full bg-accent-400"></span>
+                        <span class="text-xs font-mono font-medium text-accent-300" x-text="formatTime(workout.seconds)"></span>
+                    </div>
+                </template>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 px-4 py-5 space-y-5">
+
+            <!-- TAB 1: WORKOUT -->
+            <div x-show="activeTab === 'workout'" x-cloak class="space-y-4">
+                
+                <!-- Not Active State -->
+                <template x-if="!workout.isActive">
+                    <div class="bg-dark-900 border border-slate-800 rounded-2xl p-6 text-center shadow-xl space-y-5">
+                        <div class="w-14 h-14 bg-accent-600/10 text-accent-400 rounded-2xl flex items-center justify-center mx-auto text-2xl border border-accent-500/20">
+                            <i class="fa-solid fa-dumbbell"></i>
+                        </div>
+                        <div class="space-y-1">
+                            <h2 class="text-lg font-bold">Начать тренировку</h2>
+                            <p class="text-slate-400 text-xs">Запустите свободную сессию или выберите сохраненный план.</p>
+                        </div>
+                        
+                        <button @click="startWorkout()" class="w-full bg-accent-600 hover:bg-accent-500 text-white font-medium py-3 rounded-xl transition shadow-lg shadow-accent-600/25 flex items-center justify-center space-x-2 text-sm">
+                            <i class="fa-solid fa-play text-xs"></i>
+                            <span>Свободная тренировка</span>
+                        </button>
+
+                        <!-- Quick Start Plans -->
+                        <template x-if="plans.length > 0">
+                            <div class="pt-4 border-t border-slate-800 text-left space-y-2">
+                                <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Быстрый запуск из планов:</h3>
+                                <div class="space-y-2">
+                                    <template x-for="plan in plans" :key="plan.id">
+                                        <div @click="startPlan(plan)" class="bg-dark-800/60 hover:bg-dark-800 border border-slate-800 p-3 rounded-xl cursor-pointer transition flex items-center justify-between group">
+                                            <div>
+                                                <h4 class="font-medium text-xs text-slate-200 group-hover:text-accent-400 transition" x-text="plan.name"></h4>
+                                                <p class="text-[10px] text-slate-400" x-text="plan.exercises.length + ' упражнений'"></p>
+                                            </div>
+                                            <i class="fa-solid fa-circle-play text-slate-500 group-hover:text-accent-400 text-base transition"></i>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Active Workout State -->
+                <template x-if="workout.isActive">
+                    <div class="space-y-4">
+                        <!-- Top Bar -->
+                        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-xl">
+                            <div class="flex items-center justify-between">
+                                <input type="text" x-model="workout.name" class="bg-transparent text-base font-bold text-slate-100 border-b border-transparent focus:border-accent-500 focus:outline-none transition py-0.5">
+                                <div class="flex items-center space-x-1.5 bg-dark-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                                    <i class="fa-solid fa-stopwatch text-accent-400 text-xs"></i>
+                                    <span class="text-xs font-mono text-accent-400 font-semibold" x-text="formatTime(workout.seconds)"></span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 pt-1">
+                                <button @click="finishWorkout()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center space-x-1.5">
+                                    <i class="fa-solid fa-check"></i>
+                                    <span>Завершить</span>
+                                </button>
+                                <button @click="if(confirm('Сбросить текущую тренировку?')) stopWorkout()" class="bg-dark-800 hover:bg-red-950/40 text-red-400 text-xs font-medium px-3 py-2.5 rounded-xl transition border border-slate-700">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Exercises List -->
+                        <div class="space-y-3">
+                            <template x-for="(exercise, exIndex) in workout.exercises" :key="exercise.id">
+                                <div class="bg-dark-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                                    <!-- Exercise Header with Icon -->
+                                    <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                                        <div class="flex items-center space-x-2.5">
+                                            <div class="w-8 h-8 rounded-lg bg-dark-800 text-accent-400 flex items-center justify-center border border-slate-700 shrink-0">
+                                                <i :class="'fa-solid ' + (exercise.icon || 'fa-dumbbell') + ' text-sm'"></i>
+                                            </div>
+                                            <h3 class="font-bold text-sm text-slate-100 leading-tight" x-text="exercise.name"></h3>
+                                        </div>
+                                        <button @click="removeExerciseFromWorkout(exIndex)" class="text-slate-500 hover:text-red-400 p-1">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Sets Table -->
+                                    <div class="space-y-1.5">
+                                        <div class="grid grid-cols-12 gap-1 text-[10px] font-semibold text-slate-400 px-1 uppercase tracking-wider">
+                                            <div class="col-span-2 text-center">Сет</div>
+                                            <div class="col-span-4 text-center">Вес (кг)</div>
+                                            <div class="col-span-4 text-center">Повт</div>
+                                            <div class="col-span-2 text-center">Готово</div>
+                                        </div>
+
+                                        <template x-for="(set, setIndex) in exercise.sets" :key="setIndex">
+                                            <div class="grid grid-cols-12 gap-1.5 items-center bg-dark-800/40 p-1 rounded-xl border border-slate-800">
+                                                <div class="col-span-2 text-center font-mono text-xs text-slate-400" x-text="setIndex + 1"></div>
+                                                <div class="col-span-4">
+                                                    <input type="number" step="0.5" placeholder="0" x-model="set.weight" class="w-full bg-dark-900 border border-slate-700/80 rounded-lg text-center py-1 text-xs text-slate-100 focus:outline-none focus:border-accent-500">
+                                                </div>
+                                                <div class="col-span-4">
+                                                    <input type="number" placeholder="0" x-model="set.reps" class="w-full bg-dark-900 border border-slate-700/80 rounded-lg text-center py-1 text-xs text-slate-100 focus:outline-none focus:border-accent-500">
+                                                </div>
+                                                <div class="col-span-2 flex items-center justify-center space-x-1">
+                                                    <button @click="set.completed = !set.completed" :class="set.completed ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-dark-900 text-slate-500 border-slate-700'" class="w-7 h-7 rounded-lg border flex items-center justify-center transition">
+                                                        <i class="fa-solid fa-check text-[10px]"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="flex items-center justify-between pt-1 gap-2">
+                                        <button @click="addSet(exIndex)" class="text-[11px] bg-dark-800 hover:bg-dark-700 text-accent-400 font-medium px-3 py-1.5 rounded-lg transition border border-slate-700/80 flex items-center space-x-1">
+                                            <i class="fa-solid fa-plus text-[9px]"></i>
+                                            <span>Подход</span>
+                                        </button>
+                                        <input type="text" placeholder="Заметка..." x-model="exercise.notes" class="flex-1 bg-dark-800/50 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-accent-500">
+                                    </div>
+                                </div>
+                            </template>
+
+                            <button @click="openPicker('workout')" class="w-full py-3 border border-dashed border-slate-700 hover:border-accent-500 rounded-2xl text-slate-400 hover:text-accent-400 text-xs font-medium transition flex items-center justify-center space-x-2 bg-dark-900/40">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Добавить упражнение из каталога</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- TAB 2: PLANS -->
+            <div x-show="activeTab === 'plans'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold">Планы тренировок</h2>
+                        <p class="text-slate-400 text-xs">Шаблоны ваших занятий</p>
+                    </div>
+                    <button @click="newPlanModalOpen = true" class="bg-accent-600 hover:bg-accent-500 text-white text-xs font-semibold px-3 py-2 rounded-xl transition shadow-lg shadow-accent-600/20 flex items-center space-x-1.5">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Создать</span>
+                    </button>
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="plan in plans" :key="plan.id">
+                        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <h3 class="font-bold text-sm text-slate-100" x-text="plan.name"></h3>
+                                    <p class="text-[11px] text-slate-400 mt-0.5" x-text="plan.description || 'Без описания'"></p>
+                                </div>
+                                <button @click="deletePlan(plan.id)" class="text-slate-600 hover:text-red-400 transition p-1">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+
+                            <div class="space-y-1 pt-1">
+                                <template x-for="ex in plan.exercises">
+                                    <div class="text-xs text-slate-300 flex items-center justify-between bg-dark-800/40 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                                        <div class="flex items-center space-x-2 truncate">
+                                            <i :class="'fa-solid ' + (ex.icon || 'fa-dumbbell') + ' text-slate-500 text-[10px]'"></i>
+                                            <span x-text="ex.name" class="truncate"></span>
+                                        </div>
+                                        <span class="text-accent-400 font-mono text-[10px] shrink-0 ml-2" x-text="ex.defaultSets + ' подх.'"></span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <button @click="startPlan(plan)" class="w-full bg-dark-800 hover:bg-accent-600 text-slate-200 hover:text-white font-medium text-xs py-2 rounded-xl transition border border-slate-700 hover:border-accent-500 flex items-center justify-center space-x-1.5">
+                                <i class="fa-solid fa-play text-[10px]"></i>
+                                <span>Начать тренировку</span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- TAB 3: HISTORY -->
+            <div x-show="activeTab === 'history'" x-cloak class="space-y-4">
+                <div>
+                    <h2 class="text-lg font-bold">История тренировок</h2>
+                    <p class="text-slate-400 text-xs">Архив выполненных занятий</p>
+                </div>
+
+                <template x-if="history.length === 0">
+                    <div class="bg-dark-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 space-y-2">
+                        <i class="fa-solid fa-clipboard-list text-3xl text-slate-600"></i>
+                        <p class="text-xs">История пока пуста.</p>
+                    </div>
+                </template>
+
+                <div class="space-y-3">
+                    <template x-for="item in history" :key="item.id">
+                        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                                <div>
+                                    <h3 class="font-bold text-sm text-slate-100" x-text="item.name"></h3>
+                                    <div class="flex items-center space-x-2 text-[10px] text-slate-400 mt-0.5">
+                                        <span><i class="fa-regular fa-calendar mr-1"></i> <span x-text="item.date"></span></span>
+                                        <span><i class="fa-solid fa-stopwatch mr-1"></i> <span x-text="item.duration"></span></span>
+                                    </div>
+                                </div>
+                                <button @click="deleteHistory(item.id)" class="text-slate-600 hover:text-red-400 transition p-1">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+
+                            <div class="space-y-2">
+                                <template x-for="ex in item.exercises">
+                                    <div class="bg-dark-800/40 border border-slate-800/60 p-2.5 rounded-xl space-y-1.5">
+                                        <div class="font-medium text-xs text-slate-200 flex items-center space-x-1.5">
+                                            <i :class="'fa-solid ' + (ex.icon || 'fa-dumbbell') + ' text-slate-500 text-[10px]'"></i>
+                                            <span x-text="ex.name"></span>
+                                        </div>
+                                        <div class="flex flex-wrap gap-1">
+                                            <template x-for="(set, sIdx) in ex.sets">
+                                                <div class="bg-dark-900 border border-slate-700/60 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-300">
+                                                    <span class="text-slate-500" x-text="(sIdx + 1) + 'S:'"></span>
+                                                    <span class="text-accent-400" x-text="set.weight || 0"></span>кг × <span class="text-emerald-400" x-text="set.reps || 0"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- BOTTOM NAVIGATION BAR -->
+        <nav class="bg-dark-950/95 backdrop-blur-md border-t border-slate-800 fixed bottom-0 left-0 right-0 z-40 py-2">
+            <div class="max-w-md mx-auto grid grid-cols-3 text-center">
+                <button @click="activeTab = 'workout'" :class="activeTab === 'workout' ? 'text-accent-400' : 'text-slate-500 hover:text-slate-300'" class="flex flex-col items-center justify-center py-1 transition">
+                    <i class="fa-solid fa-dumbbell text-base mb-1"></i>
+                    <span class="text-[10px] font-medium">Тренировка</span>
+                </button>
+                <button @click="activeTab = 'plans'" :class="activeTab === 'plans' ? 'text-accent-400' : 'text-slate-500 hover:text-slate-300'" class="flex flex-col items-center justify-center py-1 transition">
+                    <i class="fa-solid fa-list-check text-base mb-1"></i>
+                    <span class="text-[10px] font-medium">Планы</span>
+                </button>
+                <button @click="activeTab = 'history'" :class="activeTab === 'history' ? 'text-accent-400' : 'text-slate-500 hover:text-slate-300'" class="flex flex-col items-center justify-center py-1 transition">
+                    <i class="fa-solid fa-clock-rotate-left text-base mb-1"></i>
+                    <span class="text-[10px] font-medium">История</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- MODAL 1: CREATE / EDIT PLAN (Z-INDEX 50) -->
+        <div x-show="newPlanModalOpen" x-cloak class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-dark-950/80 backdrop-blur-sm p-0 sm:p-4">
+            <div @click.away="newPlanModalOpen = false" class="bg-dark-900 border border-slate-800 w-full max-w-md max-h-[85vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-2xl overflow-hidden">
+                <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-dark-950/50">
+                    <h3 class="font-bold text-sm">Создание нового плана</h3>
+                    <button @click="newPlanModalOpen = false" class="text-slate-400 hover:text-slate-100 p-1">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+
+                <div class="p-4 overflow-y-auto space-y-3 flex-1">
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-semibold text-slate-400">Название плана</label>
+                        <input type="text" placeholder="Например: День ног" x-model="currentPlan.name" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-accent-500">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-semibold text-slate-400">Описание</label>
+                        <input type="text" placeholder="Описание..." x-model="currentPlan.description" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-accent-500">
+                    </div>
+
+                    <div class="space-y-2 pt-2">
+                        <div class="flex items-center justify-between">
+                            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Упражнения</label>
+                            <button @click="openPicker('plan')" class="text-xs text-accent-400 hover:text-accent-300 font-semibold flex items-center space-x-1">
+                                <i class="fa-solid fa-plus text-[10px]"></i>
+                                <span>Добавить из каталога</span>
+                            </button>
+                        </div>
+
+                        <template x-if="currentPlan.exercises.length === 0">
+                            <div class="bg-dark-800/40 border border-slate-800 rounded-xl p-5 text-center text-slate-500 text-xs">
+                                Список упражнений пуст.
+                            </div>
+                        </template>
+
+                        <div class="space-y-2">
+                            <template x-for="(ex, index) in currentPlan.exercises" :key="index">
+                                <div class="bg-dark-800/60 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between gap-2">
+                                    <div class="flex items-center space-x-2 truncate">
+                                        <i :class="'fa-solid ' + (ex.icon || 'fa-dumbbell') + ' text-accent-400 text-xs'"></i>
+                                        <span class="text-xs font-medium text-slate-200 truncate" x-text="ex.name"></span>
+                                    </div>
+                                    <div class="flex items-center space-x-2 shrink-0">
+                                        <div class="flex items-center space-x-1 text-[11px] text-slate-400">
+                                            <span>Сеты:</span>
+                                            <input type="number" min="1" max="10" x-model="ex.defaultSets" class="w-10 bg-dark-900 border border-slate-700 rounded-lg text-center py-0.5 text-xs text-slate-100 focus:outline-none focus:border-accent-500">
+                                        </div>
+                                        <button @click="currentPlan.exercises.splice(index, 1)" class="text-slate-500 hover:text-red-400 p-1">
+                                            <i class="fa-solid fa-trash text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 border-t border-slate-800 bg-dark-950/50 flex justify-end space-x-2">
+                    <button @click="newPlanModalOpen = false" class="bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-medium px-4 py-2 rounded-xl transition">
+                        Отмена
+                    </button>
+                    <button @click="savePlan()" class="bg-accent-600 hover:bg-accent-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition shadow-lg shadow-accent-600/20">
+                        Сохранить план
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 2: EXERCISE CATALOG / PICKER (Z-INDEX 60 - ВСЕГДА ПОВЕРХ) -->
+        <div x-show="pickerModalOpen" x-cloak class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-dark-950/80 backdrop-blur-sm p-0 sm:p-4">
+            <div @click.away="pickerModalOpen = false" class="bg-dark-900 border border-slate-800 w-full max-w-md max-h-[85vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-2xl overflow-hidden">
+                <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-dark-950/50">
+                    <h3 class="font-bold text-sm">Каталог тренажёров</h3>
+                    <button @click="pickerModalOpen = false" class="text-slate-400 hover:text-slate-100 p-1">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+
+                <div class="p-4 overflow-y-auto space-y-5 flex-1">
+                    <template x-for="cat in categories" :key="cat.name">
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-2 text-accent-400 font-semibold text-[11px] uppercase tracking-wider">
+                                <i :class="'fa-solid ' + cat.icon"></i>
+                                <span x-text="cat.name"></span>
+                            </div>
+                            <div class="grid grid-cols-1 gap-2">
+                                <template x-for="item in cat.items" :key="item.name">
+                                    <div @click="pickerTarget === 'workout' ? addExerciseToActive(item) : addExerciseToPlan(item)" class="bg-dark-800/60 hover:bg-accent-600/20 hover:border-accent-500/50 border border-slate-800 p-2.5 rounded-xl cursor-pointer transition flex items-center justify-between group">
+                                        <div class="flex items-center space-x-3">
+                                            <!-- Visual Equipment Icon Card -->
+                                            <div class="w-9 h-9 rounded-lg bg-dark-900 border border-slate-700/70 flex items-center justify-center text-accent-400 group-hover:scale-105 transition shrink-0">
+                                                <i :class="'fa-solid ' + item.icon + ' text-base'"></i>
+                                            </div>
+                                            <span class="text-xs text-slate-200 group-hover:text-accent-300 font-medium leading-tight" x-text="item.name"></span>
+                                        </div>
+                                        <i class="fa-solid fa-plus text-xs text-slate-500 group-hover:text-accent-400 shrink-0 ml-2"></i>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- APP SCRIPT LOGIC -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('forzaApp', () => ({
+                activeTab: 'workout',
+                categories: [
+                    {
+                        name: 'Ноги и ягодицы',
+                        icon: 'fa-child',
+                        items: [
+                            { name: 'Жим ногами в угловой платформе', icon: 'fa-angles-down' },
+                            { name: 'Жим ногами лёжа', icon: 'fa-box-archive' },
+                            { name: 'Жим на ягодицы под углом', icon: 'fa-up-right-and-down-left-from-center' },
+                            { name: 'Гакк-присед', icon: 'fa-arrows-up-to-line' },
+                            { name: 'Разгибание и сгибание ног', icon: 'fa-rotate' },
+                            { name: 'Ягодичный мост в тренажёре', icon: 'fa-bridge' },
+                            { name: 'Сведение и разведение ног', icon: 'fa-arrows-left-right' },
+                            { name: 'Отведение и приведение ноги в сторону', icon: 'fa-arrow-right-from-bracket' },
+                            { name: 'Отведение ноги назад', icon: 'fa-arrow-left-long' },
+                            { name: 'Икроножные стоя и сидя', icon: 'fa-socks' },
+                            { name: 'Стойки для приседа со штангой', icon: 'fa-bars-staggered' },
+                            { name: 'Машина Смита', icon: 'fa-[#fa-sliders]' }
+                        ]
+                    },
+                    {
+                        name: 'Грудь и плечи',
+                        icon: 'fa-child-reaching',
+                        items: [
+                            { name: 'Жим лёжа (горизонтальный и наклонный)', icon: 'fa-dumbbell' },
+                            { name: 'Жим от груди в тренажёре', icon: 'fa-grip-lines' },
+                            { name: 'Жим от груди под углом', icon: 'fa-square-up-right' },
+                            { name: 'Бабочка и разведения', icon: 'fa-crow' },
+                            { name: 'Жим вверх в тренажёре', icon: 'fa-arrow-up' },
+                            { name: 'Маховые тренажёры на дельты', icon: 'fa-hands-holding-circle' }
+                        ]
+                    },
+                    {
+                        name: 'Кардио',
+                        icon: 'fa-heart-pulse',
+                        items: [
+                            { name: 'Беговые дорожки', icon: 'fa-person-running' },
+                            { name: 'Эллипсоиды', icon: 'fa-person-walking' },
+                            { name: 'Велотренажёры и сайклы', icon: 'fa-person-biking' },
+                            { name: 'Гребные тренажёры', icon: 'fa-water' },
+                            { name: 'Степперы', icon: 'fa-stairs' },
+                            { name: 'Лестница-климбер', icon: 'fa-bars-progress' },
+                            { name: 'Air bike', icon: 'fa-fan' },
+                            { name: 'Лыжные тренажёры', icon: 'fa-person-skiing' }
+                        ]
+                    },
+                    {
+                        name: 'Спина',
+                        icon: 'fa-user-injured',
+                        items: [
+                            { name: 'Верхняя тяга (широким и узким хватом)', icon: 'fa-arrow-down' },
+                            { name: 'Горизонтальная тяга', icon: 'fa-arrow-left' },
+                            { name: 'Т-гриф', icon: 'fa-anchor' },
+                            { name: 'Пулловер', icon: 'fa-circle-notch' },
+                            { name: 'Турники и брусья с противовесом', icon: 'fa-[#fa-child-combat]' },
+                            { name: 'Гиперэкстензия', icon: 'fa-person-falling' },
+                            { name: 'Многофункциональная станция', icon: 'fa-cubes' }
+                        ]
+                    },
+                    {
+                        name: 'Руки и пресс',
+                        icon: 'fa-hand-fist',
+                        items: [
+                            { name: 'Скамья Скотта', icon: 'fa-chair' },
+                            { name: 'Блочные станции на бицепс и трицепс', icon: 'fa-link' },
+                            { name: 'Гантельный ряд с мелким шагом', icon: 'fa-dumbbell' },
+                            { name: 'Скамьи для пресса', icon: 'fa-border-bottom' },
+                            { name: 'Римский стул', icon: 'fa-[#fa-couch]' },
+                            { name: 'Кроссовер', icon: 'fa-arrows-split-up-and-left' }
+                        ]
+                    },
+                    {
+                        name: 'Свободный вес и функционал',
+                        icon: 'fa-weight-hanging',
+                        items: [
+                            { name: 'Олимпийские грифы и блины', icon: 'fa-compact-disc' },
+                            { name: 'Прямые и EZ-грифы', icon: 'fa-minus' },
+                            { name: 'Помост для тяги', icon: 'fa-layer-group' },
+                            { name: 'Гири и медболы', icon: 'fa-bowling-ball' },
+                            { name: 'TRX и резины', icon: 'fa-infinity' },
+                            { name: 'Тумбы для зашагивания', icon: 'fa-[#fa-cube]' },
+                            { name: 'Рама для функционального тренинга', icon: 'fa-border-all' }
+                        ]
+                    }
+                ],
+                
+                workout: {
+                    name: 'Тренировка в зале',
+                    isActive: false,
+                    seconds: 0,
+                    timer: null,
+                    exercises: []
+                },
+
+                plans: JSON.parse(localStorage.getItem('forza_plans')) || [
+                    {
+                        id: 1,
+                        name: 'День ног (Базовый)',
+                        description: 'Квадрицепсы, бицепс бедра и икры',
+                        exercises: [
+                            { name: 'Жим ногами лёжа', icon: 'fa-box-archive', defaultSets: 4 },
+                            { name: 'Гакк-присед', icon: 'fa-arrows-up-to-line', defaultSets: 3 },
+                            { name: 'Разгибание и сгибание ног', icon: 'fa-rotate', defaultSets: 3 }
+                        ]
+                    }
+                ],
+
+                history: JSON.parse(localStorage.getItem('forza_history')) || [],
+
+                pickerModalOpen: false,
+                pickerTarget: 'workout',
+                newPlanModalOpen: false,
+                currentPlan: { name: '', description: '', exercises: [] },
+
+                init() {
+                    this.$watch('plans', val => localStorage.setItem('forza_plans', JSON.stringify(val)));
+                    this.$watch('history', val => localStorage.setItem('forza_history', JSON.stringify(val)));
+                },
+
+                startWorkout(customName = 'Тренировка в зале', presetExercises = []) {
+                    this.workout.name = customName;
+                    this.workout.isActive = true;
+                    this.workout.seconds = 0;
+                    this.workout.exercises = presetExercises.map(ex => ({
+                        id: Date.now() + Math.random(),
+                        name: ex.name,
+                        icon: ex.icon || 'fa-dumbbell',
+                        notes: '',
+                        sets: Array.from({ length: ex.defaultSets || 3 }, () => ({ weight: '', reps: '', completed: false }))
+                    }));
+                    this.activeTab = 'workout';
+                    
+                    if (this.workout.timer) clearInterval(this.workout.timer);
+                    this.workout.timer = setInterval(() => {
+                        this.workout.seconds++;
+                    }, 1000);
+                },
+
+                stopWorkout() {
+                    if (this.workout.timer) clearInterval(this.workout.timer);
+                    this.workout.isActive = false;
+                },
+
+                finishWorkout() {
+                    if (this.workout.exercises.length === 0) {
+                        alert('Добавьте хотя бы одно упражнение!');
+                        return;
+                    }
+                    
+                    const completedWorkout = {
+                        id: Date.now(),
+                        name: this.workout.name,
+                        date: new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+                        duration: this.formatTime(this.workout.seconds),
+                        exercises: JSON.parse(JSON.stringify(this.workout.exercises))
+                    };
+
+                    this.history.unshift(completedWorkout);
+                    this.stopWorkout();
+                    this.workout.exercises = [];
+                    this.activeTab = 'history';
+                },
+
+                formatTime(totalSeconds) {
+                    const hrs = Math.floor(totalSeconds / 3600);
+                    const mins = Math.floor((totalSeconds % 3600) / 60);
+                    const secs = totalSeconds % 60;
+                    if (hrs > 0) {
+                        return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    }
+                    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                },
+
+                openPicker(target) {
+                    this.pickerTarget = target;
+                    this.pickerModalOpen = true;
+                },
+
+                addExerciseToActive(item) {
+                    this.workout.exercises.push({
+                        id: Date.now() + Math.random(),
+                        name: item.name,
+                        icon: item.icon,
+                        notes: '',
+                        sets: [
+                            { weight: '', reps: '', completed: false },
+                            { weight: '', reps: '', completed: false },
+                            { weight: '', reps: '', completed: false }
+                        ]
+                    });
+                    this.pickerModalOpen = false;
+                },
+
+                addExerciseToPlan(item) {
+                    this.currentPlan.exercises.push({
+                        name: item.name,
+                        icon: item.icon,
+                        defaultSets: 3
+                    });
+                    this.pickerModalOpen = false;
+                },
+
+                removeExerciseFromWorkout(index) {
+                    this.workout.exercises.splice(index, 1);
+                },
+
+                addSet(exerciseIndex) {
+                    this.workout.exercises[exerciseIndex].sets.push({ weight: '', reps: '', completed: false });
+                },
+
+                savePlan() {
+                    if (!this.currentPlan.name.trim()) {
+                        alert('Введите название плана');
+                        return;
+                    }
+                    if (this.currentPlan.exercises.length === 0) {
+                        alert('Добавьте хотя бы одно упражнение');
+                        return;
+                    }
+
+                    this.plans.push({
+                        id: Date.now(),
+                        name: this.currentPlan.name,
+                        description: this.currentPlan.description,
+                        exercises: JSON.parse(JSON.stringify(this.currentPlan.exercises))
+                    });
+
+                    this.currentPlan = { name: '', description: '', exercises: [] };
+                    this.newPlanModalOpen = false;
+                },
+
+                deletePlan(id) {
+                    this.plans = this.plans.filter(p => p.id !== id);
+                },
+
+                deleteHistory(id) {
+                    this.history = this.history.filter(h => h.id !== id);
+                },
+
+                startPlan(plan) {
+                    this.startWorkout(plan.name, plan.exercises);
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
